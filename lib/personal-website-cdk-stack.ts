@@ -1,16 +1,23 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as iam from 'aws-cdk-lib/aws-iam';
+
+require('dotenv').config();
 
 export class PersonalWebsiteCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    const dataBucket = new s3.Bucket(this, 'DataBucket', {
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryptionKey: new kms.Key(this, 'DataBucketKmsKey'),
+      bucketName: process.env.DATA_BUCKET_NAME,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'PersonalWebsiteCdkQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    dataBucket.grantRead(new iam.AccountRootPrincipal());
   }
 }
