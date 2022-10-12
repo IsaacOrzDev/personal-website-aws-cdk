@@ -5,6 +5,9 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 
 require('dotenv').config();
 
@@ -36,8 +39,33 @@ export class PersonalWebsiteCdkStack extends cdk.Stack {
 
     dataBucket.grantRead(dataLambda);
 
-    new apigw.LambdaRestApi(this, 'DataAPIEndpoint', {
+    const zone = route53.HostedZone.fromLookup(this, 'Zone', {
+      domainName: process.env.DOMAIN_NAME!,
+    });
+
+    const certificate = acm.Certificate.fromCertificateArn(
+      this,
+      'DomainCertificate',
+      process.env.DOMAIN_CERTIFICATE_ARN!
+    );
+
+    const dataApi = new apigw.LambdaRestApi(this, 'DataAPIEndpoint', {
       handler: dataLambda,
+    });
+
+    dataApi.addDomainName('ApiDomain', {
+      domainName: `${process.env.SUB_DOMAIN_NAME}.${process.env.DOMAIN_NAME}`,
+      endpointType: apigw.EndpointType.REGIONAL,
+      certificate,
+      basePath: process.env.DOMAIN_BASE_PATH,
+    });
+
+    const aRecord = new route53.ARecord(this, 'ApiDns', {
+      zone,
+      recordName: process.env.SUB_DOMAIN_NAME,
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.ApiGateway(dataApi)
+      ),
     });
   }
 }
