@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DataApiConstruct } from './data-api-construct';
+import { StaticSiteConstruct } from './static-site-construct';
 
 require('dotenv').config();
 
@@ -10,11 +11,19 @@ export class PersonalWebsiteCdkStack extends cdk.Stack {
 
     const dataApiConstruct = new DataApiConstruct(this, 'DataApiConstruct', {
       domainName: process.env.DOMAIN_NAME!,
-      subDomain: process.env.SUB_DOMAIN_NAME!,
-      basePath: process.env.DOMAIN_BASE_PATH!,
-      domainCertificateArn: process.env.DOMAIN_CERTIFICATE_ARN!,
+      subDomain: 'api-dev',
+      basePath: 'personal',
       bucketName: process.env.DATA_BUCKET_NAME!,
       region: this.region,
     });
+
+    const staticSiteConstruct = new StaticSiteConstruct(
+      this,
+      'StaticSiteConstruct',
+      {
+        domainName: process.env.DOMAIN_NAME!,
+        subDomain: 'personal',
+      }
+    );
   }
 }

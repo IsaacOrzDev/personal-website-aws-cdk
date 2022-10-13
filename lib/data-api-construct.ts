@@ -2,26 +2,26 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 
 interface DataApiProps {
   domainName: string;
   subDomain: string;
   basePath: string;
-  domainCertificateArn: string;
   bucketName: string;
-
   region: string;
 }
 
 export class DataApiConstruct extends Construct {
   constructor(scope: Construct, id: string, props: DataApiProps) {
     super(scope, id);
+
+    const apiDomain = `${props.subDomain}.${props.domainName}`;
 
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
@@ -30,8 +30,6 @@ export class DataApiConstruct extends Construct {
       bucketName: props.bucketName,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-
-    dataBucket.grantRead(new iam.AccountRootPrincipal());
 
     const dataLambda = new lambda.Function(this, 'DataHandler', {
       runtime: lambda.Runtime.NODEJS_14_X,
@@ -51,10 +49,14 @@ export class DataApiConstruct extends Construct {
       domainName: props.domainName,
     });
 
-    const certificate = acm.Certificate.fromCertificateArn(
+    const certificate = new acm.DnsValidatedCertificate(
       this,
       'DomainCertificate',
-      props.domainCertificateArn
+      {
+        domainName: apiDomain,
+        hostedZone: zone,
+        region: props.region,
+      }
     );
 
     const dataApi = new apigw.LambdaRestApi(this, 'DataAPIEndpoint', {
@@ -62,7 +64,7 @@ export class DataApiConstruct extends Construct {
     });
 
     dataApi.addDomainName('ApiDomain', {
-      domainName: `${props.subDomain}.${props.domainName}`,
+      domainName: apiDomain,
       endpointType: apigw.EndpointType.REGIONAL,
       certificate,
       basePath: props.basePath,
@@ -74,6 +76,20 @@ export class DataApiConstruct extends Construct {
       target: route53.RecordTarget.fromAlias(
         new route53Targets.ApiGateway(dataApi)
       ),
+    });
+
+    new s3deploy.BucketDeployment(this, 'Deployment', {
+      sources: [s3deploy.Source.asset('sources/data')],
+      destinationBucket: dataBucket,
+    });
+
+    new cdk.CfnOutput(this, 'DataBucketName', {
+      value: dataBucket.bucketName,
+      description: 'The Bucket that store data file',
+    });
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
+      value: `https://${apiDomain}/${props.basePath}`,
+      description: 'The Api endpoint to access data',
     });
   }
 }
