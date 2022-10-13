@@ -21,6 +21,7 @@ export class StaticSiteConstruct extends Construct {
     });
 
     const siteDomain = `${props.subDomain}.${props.domainName}`;
+    const wwwDomain = `www.${props.domainName}`;
 
     const siteBucket = new s3.Bucket(this, 'SiteBucket', {
       bucketName: siteDomain,
@@ -35,6 +36,7 @@ export class StaticSiteConstruct extends Construct {
       'DomainCertificate',
       {
         domainName: siteDomain,
+        subjectAlternativeNames: [props.domainName, wwwDomain],
         hostedZone: zone,
         region: 'us-east-1', // Cloudfront only checks this region for certificates.
       }
@@ -59,7 +61,7 @@ export class StaticSiteConstruct extends Construct {
         viewerCertificate: cloudfront.ViewerCertificate.fromAcmCertificate(
           certificate,
           {
-            aliases: [siteDomain],
+            aliases: [siteDomain, props.domainName, wwwDomain],
           }
         ),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -68,12 +70,27 @@ export class StaticSiteConstruct extends Construct {
 
     siteBucket.grantRead(accessIdentity);
 
-    const aRecord = new route53.ARecord(this, 'CdnARecord', {
+    new route53.ARecord(this, 'CdnARecord', {
       zone,
       target: route53.RecordTarget.fromAlias(
         new route53Targets.CloudFrontTarget(distribution)
       ),
       recordName: props.subDomain,
+    });
+
+    new route53.ARecord(this, 'CdnRootARecord', {
+      zone,
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.CloudFrontTarget(distribution)
+      ),
+    });
+
+    new route53.ARecord(this, 'CdnWwwARecord', {
+      zone,
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.CloudFrontTarget(distribution)
+      ),
+      recordName: 'www',
     });
 
     new s3deploy.BucketDeployment(this, 'Deployment', {
@@ -83,7 +100,11 @@ export class StaticSiteConstruct extends Construct {
 
     new cdk.CfnOutput(this, 'SiteBucketName', {
       value: siteBucket.bucketName,
-      description: 'The bucket store files for Cloudfront to use',
+      description: 'The Bucket store files for Cloudfront to use',
+    });
+    new cdk.CfnOutput(this, 'CdnId', {
+      value: distribution.distributionId,
+      description: 'The ID of Cloudfront distribution',
     });
     new cdk.CfnOutput(this, 'SiteUrl', {
       value: `https://${siteDomain}`,
