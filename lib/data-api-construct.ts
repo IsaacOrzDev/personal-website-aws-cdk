@@ -26,7 +26,6 @@ export class DataApiConstruct extends Construct {
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryptionKey: new kms.Key(this, 'DataBucketKmsKey'),
       bucketName: props.bucketName,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
